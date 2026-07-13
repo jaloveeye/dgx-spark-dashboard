@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { readFile, readdir } from 'node:fs/promises';
 import os from 'node:os';
 import { promisify } from 'node:util';
@@ -12,11 +13,23 @@ let previousCpu = readCpuTicks();
 let previousNetwork = new Map<string, { rx: number; tx: number }>();
 let previousAt = Date.now();
 
+export function parseCpuTicks(stat: string) {
+  const line = stat.split('\n').find((item) => item.startsWith('cpu '));
+  if (!line) throw new Error('/proc/stat에 CPU 지표가 없습니다.');
+  const values = line.trim().split(/\s+/).slice(1, 9).map(Number);
+  if (values.length < 8 || values.some((value) => !Number.isFinite(value))) throw new Error('/proc/stat CPU 지표가 잘못되었습니다.');
+  const [, , , idle, iowait] = values;
+  return { idle: idle + iowait, total: values.reduce((sum, value) => sum + value, 0) };
+}
+
 function readCpuTicks() {
-  const cpus = os.cpus();
-  const idle = cpus.reduce((sum, cpu) => sum + cpu.times.idle, 0);
-  const total = cpus.reduce((sum, cpu) => sum + Object.values(cpu.times).reduce((a, b) => a + b, 0), 0);
-  return { idle, total };
+  return parseCpuTicks(readFileSync('/proc/stat', 'utf8'));
+}
+
+export function calculateCpuUsage(previous: { idle: number; total: number }, current: { idle: number; total: number }) {
+  const totalDelta = current.total - previous.total;
+  if (totalDelta <= 0) return 0;
+  return Math.max(0, Math.min(100, (1 - (current.idle - previous.idle) / totalDelta) * 100));
 }
 
 function bytesFromKiB(value: string | undefined) {
@@ -104,8 +117,7 @@ async function collectNetwork(): Promise<NetworkReading[]> {
 export async function collectSnapshot(): Promise<Snapshot> {
   const errors: string[] = [];
   const currentCpu = readCpuTicks();
-  const totalDelta = currentCpu.total - previousCpu.total;
-  const usagePercent = totalDelta ? (1 - (currentCpu.idle - previousCpu.idle) / totalDelta) * 100 : 0;
+  const usagePercent = calculateCpuUsage(previousCpu, currentCpu);
   previousCpu = currentCpu;
   const safe = async <T>(label: string, task: Promise<T>, fallback: T) => task.catch((error: Error) => { errors.push(`${label}: ${error.message}`); return fallback; });
   const [memory, temperatures, disks, gpuResult, processes, network, software] = await Promise.all([

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Availability, DiskReading, HistoryPoint, ProcessReading, Snapshot } from '../shared/types';
+import { formatBytes } from './format';
 import { createTranslator, initialLocale, localizeAvailabilityReason, localizeCollectorError, type Locale } from './i18n';
 
 type Range = '1h' | '24h' | '7d';
@@ -10,13 +11,6 @@ interface SessionState { authenticated: boolean; username?: string }
 const initialTheme = (): Theme => {
   try { const saved = localStorage.getItem('dgx-dashboard-theme'); if (saved === 'system' || saved === 'dark' || saved === 'light') return saved; } catch { /* storage may be disabled */ }
   return 'system';
-};
-
-const formatBytes = (bytes: number) => {
-  if (!Number.isFinite(bytes)) return '—';
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']; let value = bytes; let i = 0;
-  while (value >= 1024 && i < units.length - 1) { value /= 1024; i++; }
-  return `${value.toFixed(i > 2 ? 1 : 0)} ${units[i]}`;
 };
 
 const formatDuration = (seconds: number, t: Translator) => {
@@ -166,10 +160,10 @@ export default function App() {
       <section className="stat-grid">
         <StatCard icon="◈" label={t('gpuTemperature')} value={snapshot.gpu.value?.temperatureCelsius != null ? `${snapshot.gpu.value.temperatureCelsius.toFixed(0)}°C` : '—'} detail={snapshot.gpu.value?.name ?? t('noGpu')} accent/>
         <StatCard icon="⌁" label={t('systemTemperature')} value={maxSystemTemp != null ? `${maxSystemTemp.toFixed(0)}°C` : '—'} detail={t('sensors', { count: snapshot.temperatures.length })}/>
-        <StatCard icon="▣" label={t('memoryUsage')} value={formatBytes(snapshot.memory.usedBytes)} detail={t('total', { value: formatBytes(snapshot.memory.totalBytes) })}/>
+        <StatCard icon="▣" label={t('memoryUsage')} value={formatBytes(snapshot.memory.usedBytes)} detail={t('memoryCapacityDetail', { value: formatBytes(snapshot.memory.totalBytes) })}/>
         <StatCard icon="↕" label={t('network')} value={formatBytes(snapshot.network.reduce((sum, item) => sum + item.rxBytesPerSecond + item.txBytesPerSecond, 0)) + '/s'} detail={t('interfaces', { count: snapshot.network.length })}/>
       </section>
-      <section className="panel usage-panel"><div className="panel-title"><div><p className="eyebrow">{t('resourceUsage')}</p><h3>{t('currentUsage')}</h3></div><span>{t('every15Seconds')}</span></div><div className="rings"><Ring value={snapshot.cpu.usagePercent} label="CPU" detail={t('logicalCores', { count: snapshot.cpu.cores })}/><Ring value={memoryPercent} label={t('memory')} detail={t('availableMemory', { value: formatBytes(snapshot.memory.availableBytes) })}/><Ring value={snapshot.gpu.value?.utilizationPercent ?? 0} label="GPU" detail={snapshot.gpu.value?.performanceState ?? t('unavailable')}/><Ring value={snapshot.disks[0]?.usedPercent ?? 0} label={t('storage')} detail={t('freeSpace', { value: formatBytes(snapshot.disks[0]?.availableBytes ?? 0) })}/></div></section>
+      <section className="panel usage-panel"><div className="panel-title"><div><p className="eyebrow">{t('resourceUsage')}</p><h3>{t('currentUsage')}</h3></div><span>{t('every15Seconds')}</span></div><div className="rings"><Ring value={snapshot.cpu.usagePercent} label="CPU" detail={t('logicalCoresAverage', { count: snapshot.cpu.cores })}/><Ring value={memoryPercent} label={t('memory')} detail={t('availableMemory', { value: formatBytes(snapshot.memory.availableBytes) })}/><Ring value={snapshot.gpu.value?.utilizationPercent ?? 0} label="GPU" detail={snapshot.gpu.value?.performanceState ?? t('unavailable')}/><Ring value={snapshot.disks[0]?.usedPercent ?? 0} label={t('storage')} detail={t('freeSpace', { value: formatBytes(snapshot.disks[0]?.availableBytes ?? 0) })}/></div></section>
       <section className="panel history-panel"><div className="panel-title"><div><p className="eyebrow">{t('history')}</p><h3>{t('usageTrend')}</h3></div><div className="range-tabs">{(['1h','24h','7d'] as Range[]).map((item) => <button className={range === item ? 'active' : ''} onClick={() => setRange(item)} key={item}>{rangeLabel(item)}</button>)}</div></div><div className="chart-grid"><div><div className="chart-label"><span><i style={{background:'#76b900'}}/>CPU</span><b>{snapshot.cpu.usagePercent.toFixed(1)}%</b></div><SparkChart points={history} field="cpuPercent" color="#76b900" emptyText={t('chartCollecting')}/></div><div><div className="chart-label"><span><i style={{background:'#a78bfa'}}/>{t('memory')}</span><b>{memoryPercent.toFixed(1)}%</b></div><SparkChart points={history} field="memoryPercent" color="#a78bfa" emptyText={t('chartCollecting')}/></div></div></section>
       <section className="two-column"><article className="panel"><div className="panel-title"><div><p className="eyebrow">STORAGE</p><h3>{t('storage')}</h3></div></div><div className="disk-list">{snapshot.disks.map((disk) => <DiskRow disk={disk} t={t} key={`${disk.device}-${disk.mount}`}/>)}</div></article><article className="panel"><div className="panel-title"><div><p className="eyebrow">{t('gpuWorkloads')}</p><h3>{t('gpuJobs')}</h3></div><span>{t('activeCount', { count: snapshot.gpuProcesses.length })}</span></div>{snapshot.gpuProcesses.map((process) => <div className="gpu-job" key={process.pid}><div><span className="pulse"/><div><strong>{process.name}</strong><small>PID {process.pid}</small></div></div><b>{process.gpuMemoryMiB?.toLocaleString()} MiB</b></div>)}{!snapshot.gpuProcesses.length && <div className="empty tall">{t('noGpuJobs')}</div>}<p className="memory-note">{t('unifiedMemoryNote')}</p></article></section>
       <section className="panel software-panel"><div className="panel-title"><div><p className="eyebrow">{t('softwareEnvironmentEyebrow')}</p><h3>{t('softwareEnvironment')}</h3></div><span>{t('checkedAtStartup')}</span></div><div className="software-grid">{softwareItem(t('operatingSystem'), snapshot.software.os)}{softwareItem(t('kernel'), snapshot.software.kernel)}{softwareItem(t('nvidiaDriver'), snapshot.software.nvidiaDriver)}{softwareItem(t('cudaSupport'), snapshot.software.cudaSupport)}{softwareItem('Node.js', snapshot.software.node)}{softwareItem(t('dashboard'), snapshot.software.dashboard)}</div><details className="software-details"><summary>{t('additionalRuntime')}</summary><div className="software-grid secondary">{softwareItem('NVIDIA-SMI', snapshot.software.nvidiaSmi)}{softwareItem('CUDA Toolkit', snapshot.software.cudaToolkit)}{softwareItem('Python', snapshot.software.python)}{softwareItem('Docker', snapshot.software.docker)}{softwareItem('NVIDIA Container Toolkit', snapshot.software.nvidiaContainerToolkit)}</div></details></section>
