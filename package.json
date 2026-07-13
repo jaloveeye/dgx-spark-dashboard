@@ -4,8 +4,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "build:pam": "mkdir -p dist-server/server && cc -std=c11 -O2 -Wall -Wextra -Werror -fstack-protector-strong -D_FORTIFY_SOURCE=2 native/pam-auth.c -o dist-server/server/pam-auth-helper -Wl,-z,relro,-z,now -Wl,-l:libpam.so.0",
+    "predev": "npm run build:pam",
     "dev": "concurrently -k \"tsx watch server/index.ts\" \"vite\"",
-    "build": "tsc -p tsconfig.server.json && vite build",
+    "build": "npm run build:pam && tsc -p tsconfig.server.json && vite build",
     "start": "node dist-server/server/index.js",
     "test": "vitest run",
     "typecheck": "tsc --noEmit && tsc -p tsconfig.server.json --noEmit"

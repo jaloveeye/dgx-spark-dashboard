@@ -1,0 +1,15 @@
+[Unit]
+Description=Renew DGX Dashboard self-signed TLS certificate
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/herace/workspace/dgx-dashboard
+Environment=TLS_CERT_DIR=/home/herace/workspace/dgx-dashboard/data/tls
+Environment=TLS_CERT_DAYS=90
+Environment=TLS_RENEW_BEFORE_DAYS=30
+Environment=TLS_RESTART_SERVICE=dgx-dashboard.service
+ExecStart=/home/herace/workspace/dgx-dashboard/scripts/renew-self-signed-cert.sh
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/herace/workspace/dgx-dashboard/data/tls

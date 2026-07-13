@@ -10,13 +10,15 @@ Environment=NODE_ENV=production
 Environment=HOST=0.0.0.0
 Environment=PORT=4180
 Environment=DATABASE_PATH=/home/herace/workspace/dgx-dashboard/data/metrics.sqlite
+Environment=PAM_SERVICE=login
+Environment=AUTH_SESSION_HOURS=8
 ExecStart=/home/herace/.nvm/versions/node/v24.18.0/bin/node dist-server/server/index.js
+Environment=AUTH_COOKIE_SECURE=true
+Environment=TLS_CERT_PATH=/home/herace/workspace/dgx-dashboard/data/tls/fullchain.pem
+Environment=TLS_KEY_PATH=/home/herace/workspace/dgx-dashboard/data/tls/privkey.pem
 Restart=on-failure
 RestartSec=5
-NoNewPrivileges=true
-PrivateTmp=true
-ProtectSystem=strict
-ReadWritePaths=/home/herace/workspace/dgx-dashboard/data
+# pam_unix invokes the restricted unix_chkpwd helper, which is incompatible with NoNewPrivileges=true.
 
 [Install]
 WantedBy=default.target
