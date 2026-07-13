@@ -1,0 +1,23 @@
+[Unit]
+Description=DGX Local Monitoring Dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=herace
+WorkingDirectory=/home/herace/workspace/dgx-dashboard
+Environment=NODE_ENV=production
+Environment=HOST=0.0.0.0
+Environment=PORT=4180
+Environment=DATABASE_PATH=/home/herace/workspace/dgx-dashboard/data/metrics.sqlite
+ExecStart=/home/herace/.nvm/versions/node/v24.18.0/bin/node dist-server/server/index.js
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/home/herace/workspace/dgx-dashboard/data
+
+[Install]
+WantedBy=multi-user.target
