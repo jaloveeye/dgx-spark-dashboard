@@ -87,3 +87,24 @@ export interface HealthResponse {
   collectorErrors: string[];
   uptimeSeconds: number;
 }
+
+export interface PackageUpdate {
+  name: string;
+  currentVersion: string;
+  availableVersion: string;
+  architecture: string;
+  security: boolean;
+  dgxNvidia: boolean;
+}
+
+export interface UpdateInfo {
+  checkedAt: number;
+  packageCacheUpdatedAt: number | null;
+  available: boolean;
+  totalCount: number;
+  securityCount: number;
+  dgxNvidiaCount: number;
+  rebootRequired: boolean;
+  managementUrl: string | null;
+  packages: PackageUpdate[];
+}

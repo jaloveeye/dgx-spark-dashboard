@@ -48,6 +48,7 @@ npm run dev
 | `COLLECT_INTERVAL_MS` | `15000` | 밀리초 단위 수집 간격 |
 | `TLS_CERT_PATH` | 비어 있음 | `TLS_KEY_PATH`와 함께 HTTPS를 활성화하는 PEM 인증서 경로 |
 | `TLS_KEY_PATH` | 비어 있음 | PEM 개인 키 경로 |
+| `DGX_UPDATE_URL` | 비어 있음 | 업데이트 버튼이 열 주소. 비어 있으면 현재 호스트의 `http://HOST:11000/updates` 사용 |
 
 ## 재부팅 후 자동 시작
 
@@ -81,6 +82,7 @@ curl -k https://127.0.0.1:4180/api/session
 - `GET /api/health` — 수집기 상태
 - `GET /api/snapshot` — 최신 전체 스냅샷
 - `GET /api/history?range=1h|24h|7d` — 다운샘플링된 지표 이력
+- `GET /api/updates[?refresh=1]` — APT 업데이트 가능 목록과 보안·DGX/NVIDIA 요약
 - `GET /api/stream` — 실시간 Server-Sent Events 스트림
 
 ## 인증과 보안

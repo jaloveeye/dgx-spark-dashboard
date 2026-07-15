@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { Availability, DiskReading, HistoryPoint, ProcessReading, Snapshot } from '../shared/types';
+import type { Availability, DiskReading, HistoryPoint, ProcessReading, Snapshot, UpdateInfo } from '../shared/types';
 import { formatBytes } from './format';
 import { createTranslator, initialLocale, localizeAvailabilityReason, localizeCollectorError, type Locale } from './i18n';
 
@@ -50,6 +50,24 @@ function SoftwareItem({ label, item, locale, t }: { label: string; item: Availab
   return <div className="software-item"><span>{label}</span><strong className={item.available ? '' : 'unavailable'}>{item.value ?? localizeAvailabilityReason(item.reason, locale) ?? t('lookupUnavailable')}</strong></div>;
 }
 
+function UpdatePanel({ info, loading, error, managementUrl, locale, t, onRefresh }: { info: UpdateInfo | null; loading: boolean; error: boolean; managementUrl: string; locale: Locale; t: Translator; onRefresh: () => void }) {
+  const cacheTime = info?.packageCacheUpdatedAt ? new Date(info.packageCacheUpdatedAt).toLocaleString(locale === 'ko' ? 'ko-KR' : 'en-US') : null;
+  const heading = loading && !info ? t('checkingUpdates') : error && !info ? t('updateCheckFailed') : info?.available ? t('updatesAvailable', { count: info.totalCount }) : t('systemUpToDate');
+  const detail = info?.available ? t('updatesAvailableDetail', { security: info.securityCount, dgx: info.dgxNvidiaCount }) : t('systemUpToDateDetail');
+  return <section className={`panel update-panel ${info?.available ? 'has-updates' : ''}`}>
+    <div className="update-summary">
+      <div className="update-symbol" aria-hidden="true">{loading ? '…' : info?.available ? '↥' : '✓'}</div>
+      <div className="update-copy"><p className="eyebrow">{t('updatesEyebrow')}</p><h3>{heading}</h3>{!(error && !info) && <p>{detail}</p>}<small>{cacheTime ? t('packageCacheUpdated', { time: cacheTime }) : t('cachedPackageData')}</small></div>
+    </div>
+    <div className="update-actions">
+      {info?.rebootRequired && <span className="update-badge warning">{t('rebootRequired')}</span>}
+      <button className="secondary-action" onClick={onRefresh} disabled={loading}>{loading ? t('checkingUpdates') : t('checkAgain')}</button>
+      {info?.available && <a className="primary-action" href={managementUrl} target="_blank" rel="noreferrer">{t('openUpdatePage')} ↗</a>}
+    </div>
+    {info?.available && <details className="update-details"><summary>{t('updateDetails', { count: info.totalCount })}</summary><div className="update-table-wrap"><table><thead><tr><th>{t('updatePackage')}</th><th>{t('currentVersion')}</th><th>{t('availableVersion')}</th></tr></thead><tbody>{info.packages.map((item) => <tr key={`${item.name}-${item.architecture}`}><td><strong>{item.name}</strong><span className="package-labels">{item.security && <i>{t('securityUpdate')}</i>}{item.dgxNvidia && <i>{t('dgxNvidiaUpdate')}</i>}</span></td><td className="muted">{item.currentVersion}</td><td>{item.availableVersion}</td></tr>)}</tbody></table></div></details>}
+  </section>;
+}
+
 function PreferenceControls({ locale, setLocale, theme, setTheme, t }: { locale: Locale; setLocale: (locale: Locale) => void; theme: Theme; setTheme: (theme: Theme) => void; t: Translator }) {
   return <div className="preferences"><div className="language-switch" role="group" aria-label={t('language')}><button className={locale === 'ko' ? 'active' : ''} aria-pressed={locale === 'ko'} onClick={() => setLocale('ko')}>한국어</button><button className={locale === 'en' ? 'active' : ''} aria-pressed={locale === 'en'} onClick={() => setLocale('en')}>EN</button></div><label className="theme-select" title={t('theme')}><span aria-hidden="true">◐</span><select aria-label={t('theme')} value={theme} onChange={(event) => setTheme(event.target.value as Theme)}><option value="system">{t('themeSystem')}</option><option value="dark">{t('themeDark')}</option><option value="light">{t('themeLight')}</option></select></label></div>;
 }
@@ -88,6 +106,9 @@ export default function App() {
   const [range, setRange] = useState<Range>('1h');
   const [connected, setConnected] = useState(false);
   const [errorKind, setErrorKind] = useState<'collector' | 'history' | null>(null);
+  const [updates, setUpdates] = useState<UpdateInfo | null>(null);
+  const [updatesLoading, setUpdatesLoading] = useState(false);
+  const [updatesError, setUpdatesError] = useState(false);
   const t = useMemo(() => createTranslator(locale), [locale]);
 
   useEffect(() => {
@@ -137,9 +158,29 @@ export default function App() {
     load(); const timer = setInterval(load, 60_000); return () => clearInterval(timer);
   }, [authState?.authenticated, range, snapshot?.timestamp]);
 
+  const loadUpdates = async (refresh = false) => {
+    if (!authState?.authenticated || updatesLoading) return;
+    setUpdatesLoading(true); setUpdatesError(false);
+    try {
+      const response = await fetch(`/api/updates${refresh ? '?refresh=1' : ''}`);
+      if (response.status === 401) { setAuthState({ authenticated: false }); return; }
+      if (!response.ok) throw new Error('update check failed');
+      setUpdates(await response.json() as UpdateInfo);
+    } catch {
+      setUpdatesError(true);
+    } finally {
+      setUpdatesLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (authState?.authenticated) void loadUpdates();
+  }, [authState?.authenticated]);
+
   const memoryPercent = snapshot ? snapshot.memory.usedBytes / snapshot.memory.totalBytes * 100 : 0;
   const maxSystemTemp = useMemo(() => snapshot?.temperatures.length ? Math.max(...snapshot.temperatures.map((reading) => reading.celsius)) : null, [snapshot]);
   const rangeLabel = (item: Range) => item === '1h' ? t('oneHour') : item === '24h' ? t('twentyFourHours') : t('sevenDays');
+  const updateManagementUrl = updates?.managementUrl ?? `http://${window.location.hostname}:11000/updates`;
 
   if (authState === null) return <main className="loading"><div className="loader"/><h1>{t('appTitle')}</h1><p>{t('sessionChecking')}</p></main>;
   if (!authState.authenticated) return <LoginView locale={locale} setLocale={setLocale} theme={theme} setTheme={setTheme} t={t} onAuthenticated={(session) => { setSnapshot(null); setHistory([]); setAuthState(session); }}/>;
@@ -148,7 +189,7 @@ export default function App() {
   const softwareItem = (label: string, item: Availability<string>) => <SoftwareItem label={label} item={item} locale={locale} t={t}/>;
   const logout = async () => {
     try { await fetch('/api/logout', { method: 'POST' }); } finally {
-      setSnapshot(null); setHistory([]); setConnected(false); setAuthState({ authenticated: false });
+      setSnapshot(null); setHistory([]); setUpdates(null); setConnected(false); setAuthState({ authenticated: false });
     }
   };
 
@@ -157,6 +198,7 @@ export default function App() {
     <main>
       {snapshot.errors.length > 0 && <div className="alert">{t('metricsUnavailable')} {snapshot.errors.map((item) => localizeCollectorError(item, locale)).join(' · ')}</div>}
       <section className="hero"><div><p className="eyebrow">{t('systemOverview')}</p><h2>{t('systemPrefix')} <em>{t(snapshot.errors.length ? 'systemDegraded' : 'systemNormal')}</em>{t('systemSuffix') ? ` ${t('systemSuffix')}` : ''}</h2><p>{t('coresUptime', { cores: snapshot.cpu.cores, duration: formatDuration(snapshot.uptimeSeconds, t) })}</p></div><div className="hero-meta"><span>{t('load1m')}</span><strong>{snapshot.cpu.load1.toFixed(2)}</strong></div></section>
+      <UpdatePanel info={updates} loading={updatesLoading} error={updatesError} managementUrl={updateManagementUrl} locale={locale} t={t} onRefresh={() => void loadUpdates(true)}/>
       <section className="stat-grid">
         <StatCard icon="◈" label={t('gpuTemperature')} value={snapshot.gpu.value?.temperatureCelsius != null ? `${snapshot.gpu.value.temperatureCelsius.toFixed(0)}°C` : '—'} detail={snapshot.gpu.value?.name ?? t('noGpu')} accent/>
         <StatCard icon="⌁" label={t('systemTemperature')} value={maxSystemTemp != null ? `${maxSystemTemp.toFixed(0)}°C` : '—'} detail={t('sensors', { count: snapshot.temperatures.length })}/>

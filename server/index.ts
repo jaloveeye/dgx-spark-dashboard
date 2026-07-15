@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { AuthService, clientAddress, expiredSessionCookie, requestCookie, requestHasSameOrigin, sessionCookie, sessionCookieName } from './auth.js';
 import { collectSnapshot } from './collector.js';
 import { MetricsStore } from './store.js';
+import { collectUpdateInfo } from './updates.js';
 import type { Snapshot } from '../shared/types.js';
 
 const port = Number(process.env.PORT ?? 4180);
@@ -92,6 +93,10 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
     if (!session) return json(res, { error: 'authentication_required' }, 401);
     if (url.pathname === '/api/health' && req.method === 'GET') return json(res, { status: latest ? (latest.errors.length ? 'degraded' : 'ok') : 'starting', lastCollectedAt: latest?.timestamp ?? null, collectorErrors: latest?.errors ?? [], uptimeSeconds: process.uptime() });
     if (url.pathname === '/api/snapshot' && req.method === 'GET') return latest ? json(res, latest) : json(res, { error: 'collector_starting' }, 503);
+    if (url.pathname === '/api/updates' && req.method === 'GET') {
+      try { return json(res, await collectUpdateInfo(url.searchParams.get('refresh') === '1')); }
+      catch { return json(res, { error: 'update_check_failed' }, 503); }
+    }
     if (url.pathname === '/api/history' && req.method === 'GET') {
       const rangeName = url.searchParams.get('range') as keyof typeof ranges ?? '1h';
       const range = ranges[rangeName] ?? ranges['1h'];

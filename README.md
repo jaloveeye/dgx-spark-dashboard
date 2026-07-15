@@ -48,6 +48,7 @@ npm run dev
 | `COLLECT_INTERVAL_MS` | `15000` | Collection interval in milliseconds |
 | `TLS_CERT_PATH` | empty | PEM certificate path; enables HTTPS with `TLS_KEY_PATH` |
 | `TLS_KEY_PATH` | empty | PEM private-key path |
+| `DGX_UPDATE_URL` | empty | Update button destination; defaults to `http://HOST:11000/updates` on the current host |
 
 ## Start automatically after reboot
 
@@ -81,6 +82,7 @@ curl -k https://127.0.0.1:4180/api/session
 - `GET /api/health` — collector health
 - `GET /api/snapshot` — latest complete snapshot
 - `GET /api/history?range=1h|24h|7d` — downsampled metric history
+- `GET /api/updates[?refresh=1]` — available APT packages with security and DGX/NVIDIA summaries
 - `GET /api/stream` — live Server-Sent Events stream
 
 ## Authentication and security
